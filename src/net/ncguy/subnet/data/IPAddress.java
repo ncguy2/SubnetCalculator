@@ -1,7 +1,5 @@
 package net.ncguy.subnet.data;
 
-import java.util.Arrays;
-
 /**
  * Created by Guy on 23/03/2016.
  */
@@ -117,7 +115,6 @@ public class IPAddress implements Comparable<IPAddress> {
             set2[i] = getPaddedBinary(Integer.parseInt(set2[i]), 8);
             maskedSet[i] = "";
         }
-        System.out.println(Arrays.toString(maskedSet));
         for(int i = 0; i < 4; i++) {
             char[] set1Char = set1[i].toCharArray();
             char[] set2Char = set2[i].toCharArray();
@@ -125,17 +122,23 @@ public class IPAddress implements Comparable<IPAddress> {
                 maskedSet[i] += Integer.parseInt(set1Char[j]+"") & Integer.parseInt(set2Char[j]+"");
             }
         }
-        System.out.println(Arrays.toString(maskedSet));
         for(int i = 0; i < maskedSet.length; i++) {
             maskedSet[i] = Integer.parseInt(maskedSet[i], 2)+"";
         }
-        System.out.println(Arrays.toString(maskedSet));
         return new IPAddress(maskedSet);
     }
 
     @Override
     public String toString() {
         return String.format("%s.%s.%s.%s", o1, o2, o3, o4);
+    }
+
+    public int getPositiveBits() {
+        char[] bits = toBinaryOctetString().replace(".", "").toCharArray();
+        int networkBits = 0;
+        for (char bit : bits)
+            if(bit == '1') networkBits++;
+        return networkBits;
     }
 
     public IPAddress copy() {
@@ -194,6 +197,26 @@ public class IPAddress implements Comparable<IPAddress> {
         if(addr.o1 > 255) addr.o1 = 255;
         return addr;
     }
+    public IPAddress add(int diff) {
+        IPAddress addr = copy();
+
+        addr.o4 += diff;
+
+        while(addr.o4 > 255) {
+            addr.o4 -= 256;
+            addr.o3 += 1;
+        }
+        while(addr.o3 > 255) {
+            addr.o3 -= 256;
+            addr.o2 += 1;
+        }
+        while(addr.o2 > 255) {
+            addr.o2 -= 256;
+            addr.o1 += 1;
+        }
+        if(addr.o1 > 255) addr.o1 = 255;
+        return addr;
+    }
     public IPAddress sub(IPAddress ipAddress) {
         IPAddress addr = copy();
         addr.o1 -= ipAddress.o1;
@@ -201,6 +224,24 @@ public class IPAddress implements Comparable<IPAddress> {
         addr.o3 -= ipAddress.o3;
         addr.o4 -= ipAddress.o4;
 
+        while(addr.o4 < 0) {
+            addr.o4 += 256;
+            addr.o3 -= 1;
+        }
+        while(addr.o3 < 0) {
+            addr.o3 += 256;
+            addr.o2 -= 1;
+        }
+        while(addr.o2 < 0) {
+            addr.o2 += 256;
+            addr.o1 -= 1;
+        }
+        if(addr.o1 < 0) addr.o1 = 0;
+        return addr;
+    }
+    public IPAddress sub(int diff) {
+        IPAddress addr = copy();
+        addr.o4 -= diff;
         while(addr.o4 < 0) {
             addr.o4 += 256;
             addr.o3 -= 1;
@@ -236,12 +277,12 @@ public class IPAddress implements Comparable<IPAddress> {
         int diff1 = Math.abs(o1-addr.o1);
         long diff = diff4+1;
 
-        System.out.printf("Differences: \n" +
-                "\t4: %s\n" +
-                "\t3: %s\n" +
-                "\t2: %s\n" +
-                "\t1: %s\n",
-                diff4, diff3, diff2, diff1);
+//        System.out.printf("Differences: \n" +
+//                "\t4: %s\n" +
+//                "\t3: %s\n" +
+//                "\t2: %s\n" +
+//                "\t1: %s\n",
+//                diff4, diff3, diff2, diff1);
 
         diff *= diff3+1;
         diff *= diff2+1;

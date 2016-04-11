@@ -4,6 +4,7 @@ import net.ncguy.subnet.Launcher;
 import net.ncguy.subnet.data.IPAddress;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -102,11 +103,13 @@ public class SubnetFrame {
         });
         btnBits.addActionListener(e -> {
             String text = sharedBitsTextField.getText();
-            text = text.replaceAll("/[^0-9]/g", "");
+            text = text.replaceAll("[^0-9]", "");
             int nBits = Integer.parseInt(text);
-            nBits = Math.max(0, Math.min(nBits, 32));
-            sharedBitsTextField.setText("/"+nBits);
-            calculateDataFromAddr(new IPAddress(nBits));
+            if(nBits >= 1 && nBits <= 30) {
+                nBits = Math.max(0, Math.min(nBits, 32));
+                sharedBitsTextField.setText("/" + nBits);
+                calculateMaskFromBits("/" + nBits);
+            }
         });
         calculateButton.addActionListener(e -> {
             String text = ipAddrField.getText();
@@ -133,15 +136,18 @@ public class SubnetFrame {
         bits = bits.replaceAll("[^0-9]", "");
         int bBits = Integer.parseInt(bits);
         String[] binBits = new String[4];
+        for(int i = 0; i < binBits.length; i++) {
+            binBits[i] = "";
+        }
         int max = 32;
         for(int i = 0, j = 0; i < max; i++) {
-            if(i % 8 == 0) j++;
+            if(i > 0 && i % 8 == 0) j++;
             if(i < bBits) binBits[j] += "1";
             else binBits[j] += "0";
         }
         int[] bytes = new int[binBits.length];
         for (int i = 0; i < binBits.length; i++) {
-            bytes[i] = Byte.parseByte(binBits[i], 2);
+            bytes[i] = Integer.parseInt(binBits[i], 2);
         }
         calculateDataFromAddr(new IPAddress(bytes));
     }
@@ -150,18 +156,69 @@ public class SubnetFrame {
         calculateDataFromAddr(new IPAddress(mask));
     }
 
-    private void calculateDataFromAddr(IPAddress addr) {
-        int netHostSplit = 0;
-        int octetSplit = 0;
-        for(int i = 1; i < 5; i++) {
-            int b = addr.getOctet(i);
-            if(b > 0 && b < 255) {
-                netHostSplit = b;
-                octetSplit = i;
-                i = 7;
+    private void calculateDataFromAddr(IPAddress mask) {
+        IPAddress flipped = mask.flip();
+        int octetSplit = 3;
+        String bits = mask.toBinaryOctetString();
+        char[] bitsArr = bits.toCharArray();
+        for (int i = 0, j = 0; i < bitsArr.length; i++) {
+            if(i != 1 && i % 8 == 1) j++;
+            if(i < bitsArr.length-1) {
+                if((bitsArr[i]+"").equals("1") && (bitsArr[i+1]+"").equals("0")) {
+                    octetSplit = j;
+                    i = bitsArr.length;
+                }
             }
         }
-        RowData row = new RowData();
+
+        if(tablePopulationThread != null) {
+            if(tablePopulationThread.getState() != Thread.State.TERMINATED) {
+                tablePopulationThread.interrupt();
+            }
+        }
+        resetTableData();
+        final int finalOctetSplit = octetSplit;
+        tablePopulationThread = new Thread(() -> {
+            IPAddress masterAddr = new IPAddress(0, 0, 0, 0);
+            IPAddress parentAddr = masterAddr.copy();
+            boolean valid = true;
+            while(valid) {
+                RowData row = new RowData();
+                row.shared = mask.getPositiveBits();
+                row.network = parentAddr.mask(mask);
+                row.first = row.network.add(1);
+                row.broadcast = row.network.add(flipped);
+                row.last = row.broadcast.sub(1);
+                row.mask = mask;
+                row.hostCount = row.network.diff(row.broadcast);
+                addRowToTable(row);
+                parentAddr = parentAddr.add(flipped.add(1));
+                if(parentAddr.getOctet(finalOctetSplit-1) >= 1) valid = false;
+            }
+            subnetTable.invalidate();
+        });
+        tablePopulationThread.start();
+    }
+
+    Thread tablePopulationThread;
+
+    private void resetTableData() {
+        DefaultTableModel model = (DefaultTableModel)subnetTable.getModel();
+        model.setNumRows(0);
+        model.setColumnCount(0);
+        model.addColumn("Network");
+        model.addColumn("First");
+        model.addColumn("Last");
+        model.addColumn("Broadcast");
+    }
+    private void addRowToTable(RowData row) {
+        Object[] rowObj = new Object[] {
+                row.network,
+                row.first,
+                row.last,
+                row.broadcast
+        };
+        ((DefaultTableModel)subnetTable.getModel()).addRow(rowObj);
     }
 
     private void calculateDataFromFullAddr(String fullAddr) {
@@ -170,7 +227,7 @@ public class SubnetFrame {
         int shared = Integer.parseInt(parts[1]);
         IPAddress mask = getSubnetMask(shared);
         IPAddress flipped = mask.flip();
-        System.out.println("Flipped: "+flipped);
+//        System.out.println("Flipped: "+flipped);
         RowData row = new RowData();
         row.shared = shared;
         row.network = addr.mask(mask);

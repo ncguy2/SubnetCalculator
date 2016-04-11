@@ -2,6 +2,7 @@ package net.ncguy.subnet;
 
 import com.bulenkov.darcula.DarculaLaf;
 import com.bulenkov.darcula.DarculaLookAndFeelInfo;
+import net.ncguy.subnet.data.IPAddress;
 import net.ncguy.subnet.display.SubnetFrame;
 
 import javax.swing.*;
@@ -36,6 +37,9 @@ public class Launcher {
         installThemes(args);
         applyTheme(args);
         openFrame(args);
+
+        IPAddress addr1 = new IPAddress(0, 0, 0, 0);
+        System.out.println(addr1.add(769));
     }
 
     public static void installThemes(String[] args) {
